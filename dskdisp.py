@@ -6,8 +6,6 @@ from re import findall, match
 import getopt
 import pdb
 
-# filename = 'prtconf_150.txt'
-# filename = 'prtconf_unie.txt'
 filename = ''
 printHex = False
 printShort = False
