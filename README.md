@@ -8,10 +8,10 @@ but there is no tool for showing this information in a compact kind.
 
 This is a try to extract this informations from 'prtconf -Dv'
 
-./dskdisp.py -h
-usage is:
-list inforamtions for MPXIO devices
-where options are:
+ ./dskdisp.py -h
+ usage is:
+ list inforamtions for MPXIO devices
+ where options are:
 
     -f|--file <prtdiag -Dv Output file>
             file with the output of prtdiag -Dv
