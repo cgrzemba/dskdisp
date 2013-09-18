@@ -138,7 +138,7 @@ def getDev(iter_lines,inst):
                   # special handling for non multipathing device
                   for line in iter_lines:
                       if line.split('=')[0].strip() == 'dev_path':
-                          lun.addLun(sub('^[a-w]','',line.rpartition('@')[2].strip().split(':')[0]))
+                          lun.addLun(sub('^[a-z]','',line.rpartition('@')[2].strip().split(':')[0]))
                           lun.setSinglePath()
                           break
               lun.merge()
