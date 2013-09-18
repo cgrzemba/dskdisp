@@ -2,7 +2,7 @@
 
 from sys import exit, argv
 from subprocess import Popen, PIPE
-from re import findall, match
+from re import findall, match, sub
 import getopt
 import pdb
 
@@ -19,15 +19,15 @@ def usage():
     print """usage is:
 list inforamtions for MPXIO devices
 where options are:
- 
+
     -f|--file <prtdiag -Dv Output file>
             file with the output of prtdiag -Dv
-            
+
     -s|--short list, list only devlink and storage LUN
-    
+
     -x|--hex print LUN in hex like luxadm
 """
-    
+
 class Lun(object):
      headprinted = False
      lst = []
@@ -44,56 +44,80 @@ class Lun(object):
      def addDevId(self, id):
         self.devid = id
      def getDevId(self):
-        return self.devid  
+        return self.devid
+     def addBlkSize(self, no):
+        self.blksize = int(no,16)
+     def addNBlk(self, no):
+        self.nblocks = int(no,16)
      def addSerno(self, no):
         self.serial = no
      def addVendor(self, name):
         self.vendor = name
      def addProd(self, name):
         self.prod = name
+
      def addLun(self, no):
         self.lunlst.append(no)
+
      def addGuid(self,guid):
         if guid not in self.guidlst:
             self.guidlst.append(guid)
+
      def getGuid(self):
          return self.guidlst[0]
+
+     def setSinglePath(self):
+         ''' is not a multipahing device '''
+         self.singlepath = True
+
      def printVal(self):
          if not Lun.headprinted and not printShort:
              print "ssd devid                                      SN                            Vendor  PROD           \n\tLun list\n\tguid list"
              Lun.headprinted = True
-         elif not Lun.headprinted:
+         elif not Lun.headprinted and not printShort:
              print "devlink, LUN list"
          print '' if printShort else "%3d" % self.inst,
          try:
              print '' if printShort else "%42s" % self.devid,
-             print "/dev/rdsk/%sd0s2" % self.devid.partition('@')[2][1:].upper(),
+             print "%-50s" % ("/dev/rdsk/c0t%sd0s2" % self.devid.partition('@')[2][1:].upper()),
          except AttributeError:
-             pass
-         try: 
-             print '' if printShort else "%-28s" % self.serial, 
+             print "%-50s" % 'none' if printShort else "%-92s" % 'none',
+         try:
+             print '' if printShort else "%-28s" % self.serial,
          except AttributeError:
-             pass
-         try: 
-             print '' if printShort else "%-8s" % self.vendor, 
+             print "%-28s" % 'none',
+         try:
+             print '' if printShort else "%-8s" % self.vendor,
          except AttributeError:
-             pass
-         try: 
-             print '' if printShort else "%-16s" % self.prod, 
+             print "%-8s" % 'none',
+         try:
+             print '' if printShort else "%-16s" % self.prod,
+         except AttributeError:
+             print "%-16s" % 'none',
+         try:
+             print "%8dMB" % int(self.nblocks*self.blksize/1024/1024),
+         except AttributeError:
+             print "%10s" % 'unknown',
+         try:
+             if self.singlepath: print "single path",
          except AttributeError:
              pass
          try:
-             print 
+             if not printShort or len(self.lunlst) == 0:
+                 print
              for l in self.lunlst:
-                 print "\t%s" % l if printHex else "\t%s,%d" % (l.partition(',')[0],int(l.partition(',')[2],16)) 
+                 print "\t%s" % l if printHex else "\t%s,%d" % (l.partition(',')[0],int(l.partition(',')[2],16))
+                 if printShort:
+                     break
          except AttributeError:
              pass
-         try: 
+         try:
              if not printShort:
                  for g in self.guidlst:
                      print "\t%s" % g
          except AttributeError:
              print
+
      def merge(self):
          found = False
          for l in Lun.lst:
@@ -110,11 +134,24 @@ def getDev(iter_lines,inst):
       lun = Lun(inst)
       for line in iter_lines:
           if 'Device Minor Nodes:' in line :
+              if len(lun.lunlst)  == 0:
+                  # special handling for non multipathing device
+                  for line in iter_lines:
+                      if line.split('=')[0].strip() == 'dev_path':
+                          lun.addLun(sub('^[a-w]','',line.rpartition('@')[2].strip().split(':')[0]))
+                          lun.setSinglePath()
+                          break
               lun.merge()
               return
           if 'name=' in line:
               if line.split('=')[1].split()[0] == "'inquiry-serial-no'":
                   lun.addSerno(iter_lines.next().split('=')[1].split("'")[1])
+                  continue
+              elif line.split('=')[1].split()[0] == "'device-pblksize'":
+                  lun.addBlkSize(iter_lines.next().split('=')[1])
+                  continue
+              elif line.split('=')[1].split()[0] == "'device-nblocks'":
+                  lun.addNBlk(iter_lines.next().split('=')[1])
                   continue
               elif line.split('=')[1].split()[0] == "'devid'":
                   lun.addDevId(iter_lines.next().split('=')[1].split("'")[1])
@@ -136,8 +173,8 @@ def getDev(iter_lines,inst):
 ### MAIN PROGRAM ###
 if __name__ == '__main__':
     try:
-        opts, args = getopt.getopt(argv[1:], '?hsxf:', 
-            ['help', 'short', 'hex', 'file=']) 
+        opts, args = getopt.getopt(argv[1:], '?hsxf:',
+            ['help', 'short', 'hex', 'file='])
 
     except getopt.GetoptError, e:
         usage()
@@ -158,7 +195,7 @@ if __name__ == '__main__':
         fl = open(filename)
     else:
         fl = Popen(['/usr/sbin/prtconf','-Dv'],stdout=PIPE).stdout
-        
+
     lines = fl.readlines()
     iter_lines = iter(lines)
     for line in iter_lines:
@@ -170,7 +207,6 @@ if __name__ == '__main__':
           print 'mpxio-disable: '+iter_lines.next().split('=')[1],
         if printon_iscsi and 'disk, instance' in line or 'ssd, instance' in line:
           getDev(iter_lines,int(findall('#[0-9]*',line)[0].replace("#","")))
-    
+
     for l in Lun.lst:
         l.printVal()
-    
