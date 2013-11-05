@@ -1,4 +1,31 @@
 #!/usr/bin/env python
+/************************************************************************
+ * This tool shows multipathing devices and the corresponding 
+ * storage WWN, LUN in a compact manner
+ * This informations a extracted from 'prtconf -Dv' so you can use this
+ * tool also 'offline' e.g. use explorer output 
+ * 
+ * Written By: Carsten Grzemba (cgrzemba@opencsw.org)
+ * 
+ * # CDDL HEADER START
+ * #
+ * # The contents of this file are subject to the terms of the
+ * # Common Development and Distribution License (the "License").
+ * # You may not use this file except in compliance with the License.
+ * #
+ * # You can obtain a copy of the license at pkg/OPENSOLARIS.LICENSE
+ * # or http://www.opensolaris.org/os/licensing.
+ * # See the License for the specific language governing permissions
+ * # and limitations under the License.
+ * #
+ * # When distributing Covered Code, include this CDDL HEADER in each
+ * # file and include the License file at pkg/OPENSOLARIS.LICENSE.
+ * # If applicable, add the following below this CDDL HEADER, with the
+ * # fields enclosed by brackets "[]" replaced with your own identifying
+ * # information: Portions Copyright [yyyy] [name of copyright owner]
+ * #
+ * # CDDL HEADER END
+ ************************************************************************/
 
 from sys import exit, argv
 from subprocess import Popen, PIPE
@@ -33,13 +60,18 @@ class Lun(object):
      lst = []
      def __init__(self):
          self.guidlst = []
-         self.lunlst = []
+         self.lunlst = []           
          self.vendor = ''
+         self.blksize= 800
+         self.devlink = '/dev/rdsk/c0t'
+         
      def __init__(self,inst):
          self.guidlst = []
          self.lunlst = []
          self.vendor = ''
          self.inst = inst
+         self.blksize= 800
+         self.devlink = '/dev/rdsk/c0t'
 
      def addDevId(self, id):
         self.devid = id
@@ -55,9 +87,13 @@ class Lun(object):
         self.vendor = name
      def addProd(self, name):
         self.prod = name
+     def addLink(self, name):
+        self.devlink = name
 
      def addLun(self, no):
         self.lunlst.append(no)
+     def addLink(self, link):
+        self.devlink = link
 
      def addGuid(self,guid):
         if guid not in self.guidlst:
@@ -79,7 +115,7 @@ class Lun(object):
          print '' if printShort else "%3d" % self.inst,
          try:
              print '' if printShort else "%42s" % self.devid,
-             print "%-50s" % ("/dev/rdsk/c0t%sd0s2" % self.devid.partition('@')[2][1:].upper()),
+             print "%-50s" % ("%s" % self.devlink),
          except AttributeError:
              print "%-50s" % 'none' if printShort else "%-92s" % 'none',
          try:
@@ -106,7 +142,7 @@ class Lun(object):
              if not printShort or len(self.lunlst) == 0:
                  print
              for l in self.lunlst:
-                 print "\t%s" % l if printHex else "\t%s,%d" % (l.partition(',')[0],int(l.partition(',')[2],16))
+                 print "\tLUN %s" % l if printHex else "\t%s,%d" % (l.partition(',')[0],int(l.partition(',')[2],16))
                  if printShort:
                      break
          except AttributeError:
@@ -114,7 +150,7 @@ class Lun(object):
          try:
              if not printShort:
                  for g in self.guidlst:
-                     print "\t%s" % g
+                     print "\tGID %s" % g
          except AttributeError:
              print
 
@@ -131,43 +167,47 @@ class Lun(object):
              Lun.lst.append(self)
 
 def getDev(iter_lines,inst):
-      lun = Lun(inst)
-      for line in iter_lines:
-          if 'Device Minor Nodes:' in line :
-              if len(lun.lunlst)  == 0:
-                  # special handling for non multipathing device
-                  for line in iter_lines:
-                      if line.split('=')[0].strip() == 'dev_path':
-                          lun.addLun(sub('^[a-z]','',line.rpartition('@')[2].strip().split(':')[0]))
-                          lun.setSinglePath()
-                          break
-              lun.merge()
-              return
-          if 'name=' in line:
-              if line.split('=')[1].split()[0] == "'inquiry-serial-no'":
-                  lun.addSerno(iter_lines.next().split('=')[1].split("'")[1])
-                  continue
-              elif line.split('=')[1].split()[0] == "'device-pblksize'":
-                  lun.addBlkSize(iter_lines.next().split('=')[1])
-                  continue
-              elif line.split('=')[1].split()[0] == "'device-nblocks'":
-                  lun.addNBlk(iter_lines.next().split('=')[1])
-                  continue
-              elif line.split('=')[1].split()[0] == "'devid'":
-                  lun.addDevId(iter_lines.next().split('=')[1].split("'")[1])
-                  continue
-              elif line.split('=')[1].split()[0] == "'inquiry-product-id'":
-                  lun.addProd(iter_lines.next().split('=')[1].split("'")[1])
-                  continue
-              elif line.split('=')[1].split()[0] == "'inquiry-vendor-id'":
-                  lun.addVendor(iter_lines.next().split('=')[1].split("'")[1])
-                  continue
-              elif line.split('=')[1].split()[0] == "'client-guid'":
-                  lun.addGuid(iter_lines.next().split('=')[1].split("'")[1])
-                  continue
-#          pdb.set_trace()
-          if match('[ ]*Path [0-9]*: [/a-z0-9@,]*',line.strip()):
-              lun.addLun(line.rpartition('@')[2][1:].strip())
+    lun = Lun(inst)
+    for line in iter_lines:
+        if 'Device Minor Nodes:' in line :
+            for line in iter_lines:
+                if len(lun.lunlst)  == 0:
+                        # special handling for non multipathing device
+                    lun.setSinglePath()
+                    if line.split('=')[0].strip() == 'dev_path':
+                        l = sub('^[a-z]','',line.rpartition('@')[2].strip().split(':')[0])
+                        lun.addLun(l)
+                        continue
+                if line.split('=')[0].strip() == 'dev_link':
+                    lun.addLink(line.split('=')[1].strip())
+                    break
+            lun.merge()
+            return
+        if 'name=' in line:
+            if line.split('=')[1].split()[0] == "'inquiry-serial-no'":
+                lun.addSerno(iter_lines.next().split('=')[1].split("'")[1])
+                continue
+            elif line.split('=')[1].split()[0] == "'device-pblksize'":
+                lun.addBlkSize(iter_lines.next().split('=')[1])
+                continue
+            elif line.split('=')[1].split()[0] == "'device-nblocks'":
+                lun.addNBlk(iter_lines.next().split('=')[1])
+                continue
+            elif line.split('=')[1].split()[0] == "'devid'":
+                lun.addDevId(iter_lines.next().split('=')[1].split("'")[1])
+                continue
+            elif line.split('=')[1].split()[0] == "'inquiry-product-id'":
+                lun.addProd(iter_lines.next().split('=')[1].split("'")[1])
+                continue
+            elif line.split('=')[1].split()[0] == "'inquiry-vendor-id'":
+                lun.addVendor(iter_lines.next().split('=')[1].split("'")[1])
+                continue
+            elif line.split('=')[1].split()[0] == "'client-guid'":
+                lun.addGuid(iter_lines.next().split('=')[1].split("'")[1])
+                continue
+        #          pdb.set_trace()
+        if match('[ ]*Path [0-9]*: [/a-z0-9@,]*',line.strip()):
+            lun.addLun(line.rpartition('@')[2][1:].strip())
 
 
 ### MAIN PROGRAM ###
