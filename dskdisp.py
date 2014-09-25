@@ -29,13 +29,14 @@
 
 from sys import exit, argv
 from subprocess import Popen, PIPE
-from re import findall, match, sub
+from re import findall, match, sub, compile
 import getopt
 import pdb
 
 filename = ''
 printHex = False
 printShort = False
+discovZpool = False
 
 printon_iscsi = False
 printon_dev = False
@@ -100,7 +101,9 @@ class Lun(object):
             self.guidlst.append(guid)
 
      def getGuid(self):
-         return self.guidlst[0]
+         if len(self.guidlst) > 0:
+             return self.guidlst[0]
+         return None
 
      def setSinglePath(self):
          ''' is not a multipahing device '''
@@ -166,6 +169,37 @@ class Lun(object):
          if not found:
              Lun.lst.append(self)
 
+def getZpoolDevs():
+    mpdevs = []
+    zpools = []
+
+    with Popen(['/usr/sbin/mpathadm','list', 'LU'], stdout=PIPE).stdout as fl:  
+        mpdevs = [ (line.strip()) for line in fl.readlines() if 'rdsk' in line]
+    fl = Popen(['/usr/sbin/zpool','status'], stdout=PIPE).stdout
+    lines = fl.readlines()
+    iter_lines = iter(lines)
+    devpat = compile('(/dev/(r)?dsk/)?(c.*d0)(s[0-9])?')
+    for line in iter_lines:
+        if 'pool:' in line:
+            zd = {}
+            poolname = line.split()[1]
+            zd[poolname] = []
+            for line in iter_lines:
+                if len(line.split()) > 4:
+                    if  line.split()[0] in ('errors:'):
+                        break
+                    if  line.split()[0] in (poolname,'mirror-0', 'NAME', 'scan:'):
+                        continue
+                    if match(devpat, line.split()[0]):
+                        for d in mpdevs:
+                            if match(devpat, line.split()[0]).groups()[2] == match(devpat, d).groups()[2]:
+                                zd[poolname].append(d)
+                                break
+
+            zpools.append(zd)
+    return zpools
+ 
+
 def getDev(iter_lines,inst):
     lun = Lun(inst)
     for line in iter_lines:
@@ -213,8 +247,8 @@ def getDev(iter_lines,inst):
 ### MAIN PROGRAM ###
 if __name__ == '__main__':
     try:
-        opts, args = getopt.getopt(argv[1:], '?hsxf:',
-            ['help', 'short', 'hex', 'file='])
+        opts, args = getopt.getopt(argv[1:], '?hsxf:z',
+            ['help', 'short', 'hex', 'file=', 'zpool'])
 
     except getopt.GetoptError, e:
         usage()
@@ -228,14 +262,20 @@ if __name__ == '__main__':
             printHex = True
         elif o in ('-s', '--short'):
             printShort = True
+        elif o in ('-z', '--zpool'):
+            discovZpool = True
         elif o in ('-f', '--file'):
             filename = a
+
+    zpools = []
+    if discovZpool:
+        zpools = getZpoolDevs()
 
     if filename:
         fl = open(filename)
     else:
         fl = Popen(['/usr/sbin/prtconf','-Dv'],stdout=PIPE).stdout
-
+        
     lines = fl.readlines()
     iter_lines = iter(lines)
     for line in iter_lines:
@@ -248,5 +288,18 @@ if __name__ == '__main__':
         if printon_iscsi and 'disk, instance' in line or 'ssd, instance' in line:
           getDev(iter_lines,int(findall('#[0-9]*',line)[0].replace("#","")))
 
-    for l in Lun.lst:
-        l.printVal()
+    if zpools:
+        devpat = compile('(/dev/(r)?dsk/)?(c.*d0)(s[0-9])?')
+        for zp in zpools:
+            
+            # import pdb; pdb.set_trace()
+            print "Pool: ", zp.keys()[0]
+            for zpdev in zp.values():
+                for l in Lun.lst:
+                    for zpd in zpdev:
+                        if match(devpat, l.devlink).groups()[2] == match(devpat, zpd).groups()[2]:
+                            l.printVal()
+                            break        
+    else:
+        for l in Lun.lst:
+            l.printVal()
