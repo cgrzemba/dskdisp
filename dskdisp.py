@@ -31,7 +31,6 @@ from sys import exit, argv
 from subprocess import Popen, PIPE
 from re import findall, match, sub, compile
 import getopt
-import pdb
 
 filename = ''
 printHex = False
@@ -177,7 +176,7 @@ def getZpoolDevs():
 
     with Popen(['/usr/sbin/mpathadm','list', 'LU'], stdout=PIPE).stdout as fl:  
         mpdevs = [ (line.strip()) for line in fl.readlines() if 'rdsk' in line]
-    fl = Popen(['/usr/sbin/zpool','status'], stdout=PIPE).stdout
+    fl = Popen(['/usr/sbin/zpool','status'], env={'LC_ALL':'C'}, stdout=PIPE).stdout
     lines = fl.readlines()
     iter_lines = iter(lines)
     devpat = compile('(/dev/(r)?dsk/)?(c.*d0)(s[0-9])?')
