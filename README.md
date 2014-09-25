@@ -18,6 +18,8 @@ This is a try to extract this informations from 'prtconf -Dv'
 
     -s|--short list, list only devlink and storage LUN
 
+    -z|--zpool print LUN of all zpools
+
     -x|--hex print LUN in hex like luxadm
 
 

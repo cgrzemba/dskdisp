@@ -52,6 +52,8 @@ where options are:
             file with the output of prtdiag -Dv
 
     -s|--short list, list only devlink and storage LUN
+    
+    -z|--zpool print LUN of all zpools
 
     -x|--hex print LUN in hex like luxadm
 """
