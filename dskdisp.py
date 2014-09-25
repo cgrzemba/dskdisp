@@ -65,7 +65,7 @@ class Lun(object):
          self.guidlst = []
          self.lunlst = []           
          self.vendor = ''
-         self.blksize= 800
+         self.blksize= 512
          self.devlink = '/dev/rdsk/c0t'
          
      def __init__(self,inst):
@@ -73,7 +73,7 @@ class Lun(object):
          self.lunlst = []
          self.vendor = ''
          self.inst = inst
-         self.blksize= 800
+         self.blksize= 512
          self.devlink = '/dev/rdsk/c0t'
 
      def addDevId(self, id):
