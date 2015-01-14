@@ -96,8 +96,7 @@ class Lun(object):
 
      def addLun(self, no):
         self.lunlst.append(no)
-        if len(self.lunlst) > 4:
-            import pdb; pdb.set_trace()
+
      def addLink(self, link):
         self.devlink = link
 
