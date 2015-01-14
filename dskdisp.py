@@ -31,6 +31,8 @@ from sys import exit, argv
 from subprocess import Popen, PIPE
 from re import findall, match, sub, compile
 import getopt
+from socket import gethostname
+import pdb
 
 filename = ''
 printHex = False
@@ -94,6 +96,8 @@ class Lun(object):
 
      def addLun(self, no):
         self.lunlst.append(no)
+        if len(self.lunlst) > 4:
+            import pdb; pdb.set_trace()
      def addLink(self, link):
         self.devlink = link
 
@@ -204,6 +208,11 @@ def getZpoolDevs():
 def getDev(iter_lines,inst):
     lun = Lun(inst)
     for line in iter_lines:
+        if 'sd, instance' in line:
+            # offline LUN has no dev links
+            lun.addLink('')
+            lun.merge()
+            return line
         if 'Device Minor Nodes:' in line :
             for line in iter_lines:
                 if len(lun.lunlst)  == 0:
@@ -217,7 +226,7 @@ def getDev(iter_lines,inst):
                     lun.addLink(line.split('=')[1].strip())
                     break
             lun.merge()
-            return
+            return line
         if 'name=' in line:
             if line.split('=')[1].split()[0] == "'inquiry-serial-no'":
                 lun.addSerno(iter_lines.next().split('=')[1].split("'")[1])
@@ -239,6 +248,8 @@ def getDev(iter_lines,inst):
                 continue
             elif line.split('=')[1].split()[0] == "'client-guid'":
                 lun.addGuid(iter_lines.next().split('=')[1].split("'")[1])
+                continue
+            else:
                 continue
         #          pdb.set_trace()
         if match('[ ]*Path [0-9]*: [/a-z0-9@,]*',line.strip()):
@@ -273,22 +284,28 @@ if __name__ == '__main__':
         zpools = getZpoolDevs()
 
     if filename:
+        if discovZpool:
+            print "WARNING: use ZPOOL data of %s" % gethostname()
         fl = open(filename)
     else:
         fl = Popen(['/usr/sbin/prtconf','-Dv'],stdout=PIPE).stdout
         
     lines = fl.readlines()
     iter_lines = iter(lines)
+    prevline, line = None, iter_lines.next()
     for line in iter_lines:
         if 'pseudo, instance' in line :
-          printon_iscsi = False
-        if 'iscsi, instance' in line or 'scsi_vhci, instance':
-          printon_iscsi = True
+            printon_iscsi = False
+        if 'iscsi, instance' in line or 'scsi_vhci, instance' in line:
+            printon_iscsi = True
         if printon_iscsi and 'name=' in line and line.split('=')[1].split()[0] == "'mpxio-disable'":
-          print 'mpxio-disable: '+iter_lines.next().split('=')[1],
-        if printon_iscsi and 'disk, instance' in line or 'ssd, instance' in line:
-          getDev(iter_lines,int(findall('#[0-9]*',line)[0].replace("#","")))
+            print 'mpxio-disable: '+iter_lines.next().split('=')[1],
+        if printon_iscsi and 'disk, instance' in line or 'sd, instance' in line:
+            lastline = getDev(iter_lines,int(findall('#[0-9]*',line)[0].replace("#","")))
+            while 'disk, instance' in lastline or 'sd, instance' in lastline:
+                lastline = getDev(iter_lines,int(findall('#[0-9]*',lastline)[0].replace("#","")))
 
+    # pdb.set_trace()
     if zpools:
         devpat = compile('(/dev/(r)?dsk/)?(c.*d0)(s[0-9])?')
         for zp in zpools:
