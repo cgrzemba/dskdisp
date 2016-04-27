@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env python -t
 # ************************************************************************
 # * This tool shows multipathing devices and the corresponding 
 # * storage WWN, LUN in a compact manner
@@ -31,6 +31,7 @@ from sys import exit, argv
 from subprocess import Popen, PIPE
 from re import findall, match, sub, compile
 import getopt
+import os
 from socket import gethostname
 import pdb
 
@@ -42,6 +43,10 @@ discovZpool = False
 printon_iscsi = False
 printon_dev = False
 
+explo_prtconf = 'sysconfig/prtconf-vD.out'
+explo_zpools = 'disks/zfs/zpool_status_-v.out'
+explo_mpath = 'disks/mpathadm/mpathadm_list_LU.out'
+
 lunlst = []
 
 def usage():
@@ -51,6 +56,7 @@ where options are:
 
     -f|--file <prtdiag -Dv Output file>
             file with the output of prtdiag -Dv
+	--explorer <path>
 
     -s|--short list, list only devlink and storage LUN
     
@@ -115,11 +121,11 @@ class Lun(object):
 
      def printVal(self):
          if not Lun.headprinted and not printShort:
-             print "ssd devid                                      SN                            Vendor  PROD           \n\tLun list\n\tguid list"
+             print "ssd  devid                                     devlink                                            SN                           Vendor   PROD                   size\n\tLun list\n\tGID/dev WWN"
              Lun.headprinted = True
          elif not Lun.headprinted and not printShort:
              print "devlink, LUN list"
-         print '' if printShort else "%3d" % self.inst,
+         print "%3d" % self.inst,
          try:
              print '' if printShort else "%42s" % self.devid,
              print "%-50s" % ("%s" % self.devlink),
@@ -154,10 +160,12 @@ class Lun(object):
                      break
          except AttributeError:
              pass
+         except ValueError:
+             pass
          try:
              if not printShort:
                  for g in self.guidlst:
-                     print "\tGID %s" % g
+                     print "\t%s" % g
          except AttributeError:
              print
 
@@ -173,14 +181,20 @@ class Lun(object):
          if not found:
              Lun.lst.append(self)
 
-def getZpoolDevs():
+def getZpoolDevs(explorer=None):
     mpdevs = []
     zpools = []
 
-    with Popen(['/usr/sbin/mpathadm','list', 'LU'], stdout=PIPE).stdout as fl:  
+    if explorer:
+        ml = open(os.path.join(explorer,explo_mpath))
+        zl = open(os.path.join(explorer,explo_zpools))
+    else:
+        ml = Popen(['/usr/sbin/mpathadm','list', 'LU'], stdout=PIPE).stdout
+        zl = Popen(['/usr/sbin/zpool','status'], env={'LC_ALL':'C'}, stdout=PIPE).stdout
+    with ml as fl:  
         mpdevs = [ (line.strip()) for line in fl.readlines() if 'rdsk' in line]
-    fl = Popen(['/usr/sbin/zpool','status'], env={'LC_ALL':'C'}, stdout=PIPE).stdout
-    lines = fl.readlines()
+    
+    lines = zl.readlines()
     iter_lines = iter(lines)
     devpat = compile('(/dev/(r)?dsk/)?(c.*d0)(s[0-9])?')
     for line in iter_lines:
@@ -258,13 +272,14 @@ def getDev(iter_lines,inst):
 ### MAIN PROGRAM ###
 if __name__ == '__main__':
     try:
-        opts, args = getopt.getopt(argv[1:], '?hsxf:z',
-            ['help', 'short', 'hex', 'file=', 'zpool'])
+        opts, args = getopt.getopt(argv[1:], '?hsxf:zg:',
+            ['help', 'short', 'hex', 'file=', 'zpool', 'explorer='])
 
     except getopt.GetoptError, e:
         usage()
         exit(1)
-
+    
+    explorer = None
     for o, a in opts:
         if o in ('-h', '-?', '--help'):
             usage()
@@ -277,17 +292,25 @@ if __name__ == '__main__':
             discovZpool = True
         elif o in ('-f', '--file'):
             filename = a
+        elif o in ('-g', '--explorer'):
+            explorer = a
 
     zpools = []
-    if discovZpool:
-        zpools = getZpoolDevs()
-
-    if filename:
-        if discovZpool:
-            print "WARNING: use ZPOOL data of %s" % gethostname()
-        fl = open(filename)
+    
+    # pdb.set_trace()
+    if explorer:
+        if filename:
+            print "WARNING: ignore %s because use explorer output" % filename
+        fl = open(os.path.join(explorer,explo_prtconf))
     else:
-        fl = Popen(['/usr/sbin/prtconf','-Dv'],stdout=PIPE).stdout
+        if filename:
+            if discovZpool:
+                print "WARNING: use ZPOOL data of %s" % gethostname()
+            fl = open(filename)
+        else:
+            fl = Popen(['/usr/sbin/prtconf','-Dv'],stdout=PIPE).stdout
+    if discovZpool:
+        zpools = getZpoolDevs(explorer)
         
     lines = fl.readlines()
     iter_lines = iter(lines)
@@ -310,7 +333,7 @@ if __name__ == '__main__':
         for zp in zpools:
             
             # import pdb; pdb.set_trace()
-            print "Pool: ", zp.keys()[0]
+            print "\nZpool: ", zp.keys()[0]
             for zpdev in zp.values():
                 for l in Lun.lst:
                     for zpd in zpdev:
