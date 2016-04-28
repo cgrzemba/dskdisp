@@ -46,6 +46,7 @@ printon_dev = False
 explo_prtconf = 'sysconfig/prtconf-vD.out'
 explo_zpools = 'disks/zfs/zpool_status_-v.out'
 explo_mpath = 'disks/mpathadm/mpathadm_list_LU.out'
+# arch_members = (explo_prtconf, explo_zpools, explo_mpath)
 
 lunlst = []
 
@@ -181,18 +182,14 @@ class Lun(object):
          if not found:
              Lun.lst.append(self)
 
-def getZpoolDevs(explorer=None):
+def getZpoolDevs(ml=None, zl=None):
     mpdevs = []
     zpools = []
 
-    if explorer:
-        ml = open(os.path.join(explorer,explo_mpath))
-        zl = open(os.path.join(explorer,explo_zpools))
-    else:
+    if not ml or not zl:
         ml = Popen(['/usr/sbin/mpathadm','list', 'LU'], stdout=PIPE).stdout
         zl = Popen(['/usr/sbin/zpool','status'], env={'LC_ALL':'C'}, stdout=PIPE).stdout
-    with ml as fl:  
-        mpdevs = [ (line.strip()) for line in fl.readlines() if 'rdsk' in line]
+    mpdevs = [ (line.strip()) for line in ml.readlines() if 'rdsk' in line]
     
     lines = zl.readlines()
     iter_lines = iter(lines)
@@ -268,6 +265,23 @@ def getDev(iter_lines,inst):
         if match('[ ]*Path [0-9]*: [/a-z0-9@,]*',line.strip()):
             lun.addLun(line.rpartition('@')[2][1:].strip())
 
+def openExplo(explorer):
+    if os.path.isdir(explorer):
+        fprtconf = open(os.path.join(explorer,explo_prtconf))
+        fzpools = open(os.path.join(explorer,explo_zpools))
+        fmpath = open(os.path.join(explorer,explo_mpath))
+    elif os.path.isfile(explorer):
+        import tarfile
+        
+        basetf = match("(.+).tar.*", explorer).groups()[0]
+        tar = tarfile.open(explorer)
+        fprtconf = tar.extractfile(os.path.join(basetf, explo_prtconf))
+        fzpools = tar.extractfile(os.path.join(basetf, explo_zpools))
+        fmpath = tar.extractfile(os.path.join(basetf, explo_mpath))
+    else:
+        print "file/directory %s not found" % explorer
+        exit(1)
+    return fprtconf,fzpools,fmpath
 
 ### MAIN PROGRAM ###
 if __name__ == '__main__':
@@ -280,6 +294,8 @@ if __name__ == '__main__':
         exit(1)
     
     explorer = None
+    fzpools = None
+    fmpath = None
     for o, a in opts:
         if o in ('-h', '-?', '--help'):
             usage()
@@ -297,20 +313,23 @@ if __name__ == '__main__':
 
     zpools = []
     
-    # pdb.set_trace()
+
     if explorer:
         if filename:
             print "WARNING: ignore %s because use explorer output" % filename
-        fl = open(os.path.join(explorer,explo_prtconf))
+        fl,fzpools,fmpath = openExplo(explorer)
     else:
         if filename:
             if discovZpool:
-                print "WARNING: use ZPOOL data of %s" % gethostname()
+                print "ERROR: would use ZPOOL data of %s" % gethostname()
+                exit(2)
             fl = open(filename)
         else:
+            fmpath = Popen(['/usr/sbin/mpathadm','list', 'LU'], stdout=PIPE).stdout
+            fzpools = Popen(['/usr/sbin/zpool','status'], env={'LC_ALL':'C'}, stdout=PIPE).stdout
             fl = Popen(['/usr/sbin/prtconf','-Dv'],stdout=PIPE).stdout
     if discovZpool:
-        zpools = getZpoolDevs(explorer)
+        zpools = getZpoolDevs(fmpath, fzpools)
         
     lines = fl.readlines()
     iter_lines = iter(lines)
