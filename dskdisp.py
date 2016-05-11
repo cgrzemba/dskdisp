@@ -356,9 +356,12 @@ if __name__ == '__main__':
             for zpdev in zp.values():
                 for l in Lun.lst:
                     for zpd in zpdev:
-                        if match(devpat, l.devlink).groups()[2] == match(devpat, zpd).groups()[2]:
-                            l.printVal()
-                            break        
+                        try:
+                            if match(devpat, l.devlink).groups()[2] == match(devpat, zpd).groups()[2]:
+                                l.printVal()
+                                break        
+                        except AttributeError:
+                           pass
     else:
         for l in Lun.lst:
             l.printVal()
