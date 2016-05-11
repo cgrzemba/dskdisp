@@ -16,7 +16,7 @@ This is a try to extract this informations from 'prtconf -Dv'
     -f|--file <prtdiag -Dv Output file>
             file with the output of prtdiag -Dv
 
-    -g|--explorer <path to explorer> unpacked explorer
+    -g|--explorer <path to explorer> TAR(.gz) or unpacked explorer
 
     -s|--short list, list only devlink and storage LUN
 
