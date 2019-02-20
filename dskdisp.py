@@ -33,7 +33,6 @@ from re import findall, match, sub, compile
 import getopt
 import os
 from socket import gethostname
-import pdb
 
 filename = ''
 printHex = False
@@ -74,6 +73,7 @@ class Lun(object):
          self.lunlst = []           
          self.vendor = ''
          self.blksize= 512
+         self.pblksize= 512
          self.devlink = '/dev/rdsk/c0t'
          
      def __init__(self,inst):
@@ -82,6 +82,7 @@ class Lun(object):
          self.vendor = ''
          self.inst = inst
          self.blksize= 512
+         self.pblksize= 512
          self.devlink = '/dev/rdsk/c0t'
 
      def addDevId(self, id):
@@ -90,6 +91,8 @@ class Lun(object):
         return self.devid
      def addBlkSize(self, no):
         self.blksize = int(no,16)
+     def addPBlkSize(self, no):
+        self.pblksize = int(no,16)
      def addNBlk(self, no):
         self.nblocks = int(no,16)
      def addSerno(self, no):
@@ -145,7 +148,7 @@ class Lun(object):
          except AttributeError:
              print "%-16s" % 'none',
          try:
-             print "%8dMB" % int(self.nblocks*self.blksize/1024/1024),
+             print "%8dGB" % int(self.nblocks*self.blksize/1024/1024/1024),
          except AttributeError:
              print "%10s" % 'unknown',
          try:
@@ -242,6 +245,9 @@ def getDev(iter_lines,inst):
                 lun.addSerno(iter_lines.next().split('=')[1].split("'")[1])
                 continue
             elif line.split('=')[1].split()[0] == "'device-pblksize'":
+                lun.addPBlkSize(iter_lines.next().split('=')[1])
+                continue
+            elif line.split('=')[1].split()[0] == "'device-blksize'":
                 lun.addBlkSize(iter_lines.next().split('=')[1])
                 continue
             elif line.split('=')[1].split()[0] == "'device-nblocks'":
