@@ -1,9 +1,9 @@
 dskdisp
 =======
 
-This tool shows Disk Informations on **Solaris** multipathing devices which provided by prtconf.
+This tool shows Disk Informations on **Illumos/Solaris** multipathing devices which provided by prtconf.
 
-On Solaris there are different tools for showing disk data like paths and luns
+On Illumos/Solaris there are different tools for showing disk data like paths and luns
 but there is no tool for showing this information in a compact manner.
 
 The most information is extracted from 'prtconf -Dv'. For list LUN associated to zpool it uses also output from 'mpathadm list LU' and 'zpool status'. It is also possible to show the data from **explorer** output offline.
