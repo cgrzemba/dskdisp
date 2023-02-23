@@ -1,4 +1,4 @@
-#!/usr/bin/env python -t
+#!/usr/bin/python -t
 # ************************************************************************
 # * This tool shows multipathing devices and the corresponding 
 # * storage WWN, LUN in a compact manner
@@ -50,7 +50,7 @@ explo_mpath = 'disks/mpathadm/mpathadm_list_LU.out'
 lunlst = []
 
 def usage():
-    print """usage is:
+    print ("""usage is:
 list inforamtions for MPXIO devices
 where options are:
 
@@ -63,7 +63,7 @@ where options are:
     -z|--zpool print LUN of all zpools
 
     -x|--hex print LUN in hex like luxadm
-"""
+""")
 
 class Lun(object):
      headprinted = False
@@ -86,9 +86,9 @@ class Lun(object):
          self.devlink = '/dev/rdsk/c0t'
 
      def addDevId(self, id):
-        self.devid = id
+        self.devid = id.decode()
      def getDevId(self):
-        return self.devid
+        return self.devid.decode()
      def addBlkSize(self, no):
         self.blksize = int(no,16)
      def addPBlkSize(self, no):
@@ -96,24 +96,19 @@ class Lun(object):
      def addNBlk(self, no):
         self.nblocks = int(no,16)
      def addSerno(self, no):
-        self.serial = no
+        self.serial = no.decode()
      def addVendor(self, name):
-        self.vendor = name
+        self.vendor = name.decode()
      def addProd(self, name):
-        self.prod = name
+        self.prod = name.decode()
      def addLink(self, name):
         self.devlink = name
-
      def addLun(self, no):
         self.lunlst.append(no)
-
-     def addLink(self, link):
-        self.devlink = link
-
-     def addGuid(self,guid):
+     def addGuid(self,bguid):
+        guid = bguid.decode()
         if guid not in self.guidlst:
             self.guidlst.append(guid)
-
      def getGuid(self):
          if len(self.guidlst) > 0:
              return self.guidlst[0]
@@ -125,41 +120,41 @@ class Lun(object):
 
      def printVal(self):
          if not Lun.headprinted and not printShort:
-             print "ssd  devid                                     devlink                                            SN                           Vendor   PROD                   size\n\tLun list\n\tGID/dev WWN"
+             print ("ssd  devid                                     devlink                                            SN                           Vendor   PROD                   size\n\tLun list\n\tGID/dev WWN")
              Lun.headprinted = True
          elif not Lun.headprinted and not printShort:
-             print "devlink, LUN list"
-         print "%3d" % self.inst,
+             print ("devlink, LUN list")
+         print ("%3d" % self.inst,end='')
          try:
-             print '' if printShort else "%42s" % self.devid,
-             print "%-50s" % ("%s" % self.devlink),
+             print ('' if printShort else "%42s" % self.devid,end='')
+             print ("%-50s" % ("%s" % self.devlink),end='')
          except AttributeError:
-             print "%-50s" % 'none' if printShort else "%-92s" % 'none',
+             print ("%-50s" % 'none' if printShort else "%-92s" % 'none',end='')
          try:
-             print '' if printShort else "%-28s" % self.serial,
+             print ('' if printShort else "%-28s" % self.serial,end='')
          except AttributeError:
-             print "%-28s" % 'none',
+             print ("%-28s" % 'none',end='')
          try:
-             print '' if printShort else "%-8s" % self.vendor,
+             print ('' if printShort else "%-8s" % self.vendor,end='')
          except AttributeError:
-             print "%-8s" % 'none',
+             print ("%-8s" % 'none',end='')
          try:
-             print '' if printShort else "%-16s" % self.prod,
+             print ('' if printShort else "%-16s" % self.prod,end='')
          except AttributeError:
-             print "%-16s" % 'none',
+             print ("%-16s" % 'none',end='')
          try:
-             print "%8dGB" % int(self.nblocks*self.blksize/1024/1024/1024),
+             print ("%8dGB" % int(self.nblocks*self.blksize/1024/1024/1024),end='')
          except AttributeError:
-             print "%10s" % 'unknown',
+             print ("%10s" % 'unknown',end='')
          try:
-             if self.singlepath: print "single path",
+             if self.singlepath: print ("single path",end='')
          except AttributeError:
              pass
          try:
              if not printShort or len(self.lunlst) == 0:
-                 print
+                 print ()
              for l in self.lunlst:
-                 print "\tLUN %s" % l if printHex else "\t%s,%d" % (l.partition(',')[0],int(l.partition(',')[2],16))
+                 print ("\tLUN %s" % l if printHex else "\t%s,%d" % (l.partition(',')[0],int(l.partition(',')[2],16)))
                  if printShort:
                      break
          except AttributeError:
@@ -169,9 +164,9 @@ class Lun(object):
          try:
              if not printShort:
                  for g in self.guidlst:
-                     print "\t%s" % g
+                     print ("\t%s" % g)
          except AttributeError:
-             print
+             print ()
 
      def merge(self):
          found = False
@@ -192,17 +187,19 @@ def getZpoolDevs(ml=None, zl=None):
     if not ml or not zl:
         ml = Popen(['/usr/sbin/mpathadm','list', 'LU'], stdout=PIPE).stdout
         zl = Popen(['/usr/sbin/zpool','status'], env={'LC_ALL':'C'}, stdout=PIPE).stdout
-    mpdevs = [ (line.strip()) for line in ml.readlines() if 'rdsk' in line]
+    mpdevs = [ (line.strip().decode()) for line in ml.readlines() if b'rdsk' in line]
     
     lines = zl.readlines()
     iter_lines = iter(lines)
     devpat = compile('(/dev/(r)?dsk/)?(c.*d0)(s[0-9])?')
-    for line in iter_lines:
+    for bline in iter_lines:
+        line = bline.decode()
         if 'pool:' in line:
             zd = {}
             poolname = line.split()[1]
             zd[poolname] = []
-            for line in iter_lines:
+            for bline in iter_lines:
+                line = bline.decode()
                 if len(line.split()) > 4:
                     if  line.split()[0] in ('errors:'):
                         break
@@ -220,14 +217,16 @@ def getZpoolDevs(ml=None, zl=None):
 
 def getDev(iter_lines,inst):
     lun = Lun(inst)
-    for line in iter_lines:
+    for bline in iter_lines:
+        line = bline.decode()
         if 'sd, instance' in line:
             # offline LUN has no dev links
             lun.addLink('')
             lun.merge()
             return line
         if 'Device Minor Nodes:' in line :
-            for line in iter_lines:
+            for bline in iter_lines:
+                line = bline.decode()
                 if len(lun.lunlst)  == 0:
                         # special handling for non multipathing device
                     lun.setSinglePath()
@@ -242,28 +241,28 @@ def getDev(iter_lines,inst):
             return line
         if 'name=' in line:
             if line.split('=')[1].split()[0] == "'inquiry-serial-no'":
-                lun.addSerno(iter_lines.next().split('=')[1].split("'")[1])
+                lun.addSerno(iter_lines.__next__().split(b'=')[1].split(b"'")[1])
                 continue
             elif line.split('=')[1].split()[0] == "'device-pblksize'":
-                lun.addPBlkSize(iter_lines.next().split('=')[1])
+                lun.addPBlkSize(iter_lines.__next__().split(b'=')[1])
                 continue
             elif line.split('=')[1].split()[0] == "'device-blksize'":
-                lun.addBlkSize(iter_lines.next().split('=')[1])
+                lun.addBlkSize(iter_lines.__next__().split(b'=')[1])
                 continue
             elif line.split('=')[1].split()[0] == "'device-nblocks'":
-                lun.addNBlk(iter_lines.next().split('=')[1])
+                lun.addNBlk(iter_lines.__next__().split(b'=')[1])
                 continue
             elif line.split('=')[1].split()[0] == "'devid'":
-                lun.addDevId(iter_lines.next().split('=')[1].split("'")[1])
+                lun.addDevId(iter_lines.__next__().split(b'=')[1].split(b"'")[1])
                 continue
             elif line.split('=')[1].split()[0] == "'inquiry-product-id'":
-                lun.addProd(iter_lines.next().split('=')[1].split("'")[1])
+                lun.addProd(iter_lines.__next__().split(b'=')[1].split(b"'")[1])
                 continue
             elif line.split('=')[1].split()[0] == "'inquiry-vendor-id'":
-                lun.addVendor(iter_lines.next().split('=')[1].split("'")[1])
+                lun.addVendor(iter_lines.__next__().split(b'=')[1].split(b"'")[1])
                 continue
             elif line.split('=')[1].split()[0] == "'client-guid'":
-                lun.addGuid(iter_lines.next().split('=')[1].split("'")[1])
+                lun.addGuid(iter_lines.__next__().split(b'=')[1].split(b"'")[1])
                 continue
             else:
                 continue
@@ -285,7 +284,7 @@ def openExplo(explorer):
         fzpools = tar.extractfile(os.path.join(basetf, explo_zpools))
         fmpath = tar.extractfile(os.path.join(basetf, explo_mpath))
     else:
-        print "file/directory %s not found" % explorer
+        print ("file/directory %s not found" % explorer)
         exit(1)
     return fprtconf,fzpools,fmpath
 
@@ -295,7 +294,7 @@ if __name__ == '__main__':
         opts, args = getopt.getopt(argv[1:], '?hsxf:zg:',
             ['help', 'short', 'hex', 'file=', 'zpool', 'explorer='])
 
-    except getopt.GetoptError, e:
+    except getopt.GetoptError as e:
         usage()
         exit(1)
     
@@ -322,12 +321,12 @@ if __name__ == '__main__':
 
     if explorer:
         if filename:
-            print "WARNING: ignore %s because use explorer output" % filename
+            print ("WARNING: ignore %s because use explorer output" % filename)
         fl,fzpools,fmpath = openExplo(explorer)
     else:
         if filename:
             if discovZpool:
-                print "ERROR: would use ZPOOL data of %s" % gethostname()
+                print ("ERROR: would use ZPOOL data of %s" % gethostname())
                 exit(2)
             fl = open(filename)
         else:
@@ -339,14 +338,15 @@ if __name__ == '__main__':
         
     lines = fl.readlines()
     iter_lines = iter(lines)
-    prevline, line = None, iter_lines.next()
-    for line in iter_lines:
+    prevline, line = None, iter_lines.__next__()
+    for bline in iter_lines:
+        line = bline.decode()
         if 'pseudo, instance' in line :
             printon_iscsi = False
         if 'iscsi, instance' in line or 'scsi_vhci, instance' in line:
             printon_iscsi = True
         if printon_iscsi and 'name=' in line and line.split('=')[1].split()[0] == "'mpxio-disable'":
-            print 'mpxio-disable: '+iter_lines.next().split('=')[1],
+            print ('mpxio-disable: %s' % (iter_lines.__next__().split(b'=')[1]).decode())
         if printon_iscsi and 'disk, instance' in line or 'sd, instance' in line:
             lastline = getDev(iter_lines,int(findall('#[0-9]*',line)[0].replace("#","")))
             while 'disk, instance' in lastline or 'sd, instance' in lastline:
@@ -358,7 +358,7 @@ if __name__ == '__main__':
         for zp in zpools:
             
             # import pdb; pdb.set_trace()
-            print "\nZpool: ", zp.keys()[0]
+            print ("\nZpool: ", list(zp.keys())[0])
             for zpdev in zp.values():
                 for l in Lun.lst:
                     for zpd in zpdev:
@@ -371,3 +371,4 @@ if __name__ == '__main__':
     else:
         for l in Lun.lst:
             l.printVal()
+
