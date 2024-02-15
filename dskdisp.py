@@ -124,7 +124,7 @@ class Lun(object):
              Lun.headprinted = True
          elif not Lun.headprinted and not printShort:
              print ("devlink, LUN list")
-         print ("%3d" % self.inst,end='')
+         print ("%3d " % self.inst,end='')
          try:
              print ('' if printShort else "%42s" % self.devid,end='')
              print ("%-50s" % ("%s" % self.devlink),end='')
@@ -272,13 +272,13 @@ def getDev(iter_lines,inst):
 
 def openExplo(explorer):
     if os.path.isdir(explorer):
-        fprtconf = open(os.path.join(explorer,explo_prtconf))
-        fzpools = open(os.path.join(explorer,explo_zpools))
-        fmpath = open(os.path.join(explorer,explo_mpath))
+        fprtconf = open(os.path.join(explorer,explo_prtconf),'rb')
+        fzpools = open(os.path.join(explorer,explo_zpools),'rb')
+        fmpath = open(os.path.join(explorer,explo_mpath),'rb')
     elif os.path.isfile(explorer):
         import tarfile
         
-        basetf = match("(.+).tar.*", explorer).groups()[0]
+        basetf = match(".*(explorer\..+).tar.*", explorer).groups()[0]
         tar = tarfile.open(explorer)
         fprtconf = tar.extractfile(os.path.join(basetf, explo_prtconf))
         fzpools = tar.extractfile(os.path.join(basetf, explo_zpools))
@@ -328,7 +328,7 @@ if __name__ == '__main__':
             if discovZpool:
                 print ("ERROR: would use ZPOOL data of %s" % gethostname())
                 exit(2)
-            fl = open(filename)
+            fl = open(filename,'rb')
         else:
             fmpath = Popen(['/usr/sbin/mpathadm','list', 'LU'], stdout=PIPE).stdout
             fzpools = Popen(['/usr/sbin/zpool','status'], env={'LC_ALL':'C'}, stdout=PIPE).stdout
@@ -339,14 +339,28 @@ if __name__ == '__main__':
     lines = fl.readlines()
     iter_lines = iter(lines)
     prevline, line = None, iter_lines.__next__()
+    print_dev_link = False
+    print_nl = True
     for bline in iter_lines:
         line = bline.decode()
         if 'pseudo, instance' in line :
             printon_iscsi = False
+            continue
+        if print_nl and 'Device Hold:' in line:
+            print()
+            print_nl = False
+            continue
         if 'iscsi, instance' in line or 'scsi_vhci, instance' in line:
             printon_iscsi = True
+            continue
         if printon_iscsi and 'name=' in line and line.split('=')[1].split()[0] == "'mpxio-disable'":
-            print ('mpxio-disable: %s' % (iter_lines.__next__().split(b'=')[1]).decode())
+            print ('mpxio-disable: %s' % (iter_lines.__next__().split(b'=')[1]).decode().strip())
+            print_dev_link = True
+            print_nl = True
+        if print_dev_link and printon_iscsi and 'dev_link=' in line and line.split('=')[0].strip() == "dev_link" and '/dev/cfg' in line:
+            print (line.strip())
+            print_dev_link = False
+            continue
         if printon_iscsi and 'disk, instance' in line or 'sd, instance' in line:
             lastline = getDev(iter_lines,int(findall('#[0-9]*',line)[0].replace("#","")))
             while 'disk, instance' in lastline or 'sd, instance' in lastline:
